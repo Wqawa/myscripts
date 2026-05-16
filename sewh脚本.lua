@@ -1,15 +1,61 @@
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/ChinaQY/-/Main/UI"))()
 
+local s_v = "v 0.2"
+local s_data = "2026/5/16"
+
 local saftplanformenable = false
 local radollenable = false
-local time = 0.1
-local args = {buffer.fromstring("\000\000")}  
+local time = 0.05
+
+
+
+
+local function TeleportTo(Value , x, y, z)
+  local player = game:GetService("Players").LocalPlayer
+    local character = player.Character
+    if not character or not character.Parent then
+        -- 如果角色不存在，等待角色加载
+        character = player.CharacterAdded:Wait()
+    end
+    
+    -- 获取 HumanoidRootPart
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then
+        return false
+    end
+    
+    -- 处理参数：如果传入 nil，则使用当前位置
+    local currentPos = rootPart.Position
+    local targetX = (x ~= nil) and x or currentPos.X
+    local targetY = (y ~= nil) and y or currentPos.Y
+    local targetZ = (z ~= nil) and z or currentPos.Z
+    
+    -- 保持原朝向不变
+    local targetCFrame = CFrame.new(targetX, targetY, targetZ) * CFrame.Angles(0, rootPart.Orientation.Y, 0)
+  
+  
+
+local targetPath = workspace:FindFirstChild("Map")
+    and workspace.Map:FindFirstChild("Other")
+    and workspace.Map.Other:FindFirstChild("MapTerrain")
+    and workspace.Map.Other.MapTerrain:FindFirstChild("Map")
+    and workspace.Map.Other.MapTerrain.Map:FindFirstChild("Column")
+
+if targetPath or Value then
+rootPart.CFrame = targetCFrame
+end
+    
+    
+    
+    return true
+end
+   
 
 
 
 
 OrionLib:MakeNotification({
-    Name = "SEWH脚本 v0.15",
+    Name = "SEWH脚本 " .. s_v,
     Content = "脚本启动中",
     Time = 2.5 })
 
@@ -21,7 +67,7 @@ local Sound = Instance.new("Sound")
     Sound.Ended:Wait()
     Sound:Destroy()
 
-local Window = OrionLib:MakeWindow({Name = "SEWH", HidePremium = false, SaveConfig = false, IntroText = "SEWH", ConfigFolder = "SEWH"})
+local Window = OrionLib:MakeWindow({Name = "SEWH", HidePremium = false, SaveConfig = false, IntroText = "Something Evil Will Happen", ConfigFolder = "SEWH"})
 
 local Tab = Window:MakeTab({
     Name = "公告",
@@ -32,6 +78,7 @@ local Tab = Window:MakeTab({
 Tab:AddParagraph("作者","wq_furry  &  Deepseek")
 Tab:AddLabel("你懂的,我需要ui,所以改过来的")
 Tab:AddLabel("此脚本完全免费(废话,不能收费啊)")
+Tab:AddLabel("版本号 :" ..s_v.. " 日期 ：" ..s_data)
 
 local Tab = Window:MakeTab({
     Name = "主要功能",
@@ -44,16 +91,19 @@ Tab:AddToggle({
     Default = false,
     Callback = function(Value)
     radollenable = Value
-    print(Value)
+if radollenable then
     
     while radollenable do
+local args = {buffer.fromstring("\000\000")}  
+
+
 
 game:GetService("ReplicatedStorage"):WaitForChild("Communication"):WaitForChild("Packets"):WaitForChild("Packet"):WaitForChild("RemoteEvent"):FireServer(unpack(args))
  
 
 wait(time)
 end
-
+end
 end})
 
 Tab:AddToggle({
@@ -286,6 +336,159 @@ loadstring(game:HttpGet("https://rawscripts.net/raw/UPD-something-evil-will-happ
 end})
 
 local Tab = Window:MakeTab({
+    Name = "快捷传送",
+    Icon = "rbxassetid://14250466898",
+    PremiumOnly = false
+})
+
+Tab:AddLabel("圣剑特殊回合")
+
+Tab:AddButton({
+    Name = "圣剑位置",
+    Callback = function()
+-- 传送到 SwordSpot.PromptPart 上方3格处
+
+local player = game:GetService("Players").LocalPlayer
+
+-- 获取目标部件
+local targetPart = workspace:FindFirstChild("SwordSpot") and workspace.SwordSpot:FindFirstChild("PromptPart")
+
+if not targetPart then
+    warn("找不到 workspace.SwordSpot.PromptPart，请检查路径是否正确")
+    return
+end
+
+-- 获取角色
+local character = player.Character
+if not character or not character.Parent then
+    character = player.CharacterAdded:Wait()
+end
+
+-- 获取 HumanoidRootPart
+local rootPart = character:FindFirstChild("HumanoidRootPart")
+if not rootPart then
+    return
+end
+
+-- 计算目标位置：PromptPart 上方3格
+local targetPosition = targetPart.Position + Vector3.new(0, 3, 0)
+local targetCFrame = CFrame.new(targetPosition)
+
+-- 执行传送
+rootPart.CFrame = targetCFrame
+
+end})
+
+Tab:AddLabel("高地特殊回合")
+
+Tab:AddButton({
+    Name = "光明剑位置",
+    Callback = function()
+TeleportTo(false ,-260, 120, -81)
+end})
+
+Tab:AddButton({
+    Name = "黑暗剑位置",
+    Callback = function()
+TeleportTo(false ,-250, 50, 60)
+end})
+
+Tab:AddButton({
+    Name = "风剑位置",
+    Callback = function()
+TeleportTo(false ,20, 162, -339)
+end})
+
+Tab:AddButton({
+    Name = "幽灵剑位置",
+    Callback = function()
+TeleportTo(false ,240, 65, -160)
+end})
+
+Tab:AddButton({
+    Name = "毒剑位置",
+    Callback = function()
+TeleportTo(false ,104, 39, -79)
+end})
+
+Tab:AddButton({
+    Name = "烈焰剑位置",
+    Callback = function()
+TeleportTo(false ,-150, 73, -150)
+end})
+
+Tab:AddButton({
+    Name = "冰剑位置",
+    Callback = function()
+TeleportTo(false ,-45, 61, 43)
+end})
+
+Tab:AddLabel("淘汰特殊回合(跑酷)")
+
+Tab:AddButton({
+    Name = "终点",
+    Callback = function()
+-- 传送到 Ramp 的第13个子物体上方
+
+local player = game:GetService("Players").LocalPlayer
+
+-- 获取 Ramp 及其子物体
+local ramp = workspace:FindFirstChild("Map")
+    and workspace.Map:FindFirstChild("Other")
+    and workspace.Map.Other:FindFirstChild("MapTerrain")
+    and workspace.Map.Other.MapTerrain:FindFirstChild("Ramp")
+
+if not ramp then
+    return
+end
+
+local children = ramp:GetChildren()
+local targetPart = children[13]  -- 第13个子物体（索引从1开始）
+
+if not targetPart then
+    return
+end
+
+-- 获取角色
+local character = player.Character
+if not character or not character.Parent then
+    character = player.CharacterAdded:Wait()
+end
+
+local rootPart = character:FindFirstChild("HumanoidRootPart")
+if not rootPart then
+    return
+end
+
+-- 计算目标位置：传送到该物体上方3格处（可调整）
+local targetPosition = targetPart.Position + Vector3.new(0, 90, 10)
+local targetCFrame = CFrame.new(targetPosition)
+
+-- 执行传送
+rootPart.CFrame = targetCFrame
+
+end})
+
+Tab:AddButton({
+    Name = "回高塔(出生点,办法1)",
+    Callback = function()
+    
+local args = {
+	buffer.fromstring("`\003")
+}
+game:GetService("ReplicatedStorage"):WaitForChild("Communication"):WaitForChild("Packets"):WaitForChild("Packet"):WaitForChild("RemoteEvent"):FireServer(unpack(args))
+
+end})
+
+Tab:AddButton({
+    Name = "回高塔(出生点,办法2)",
+    Callback = function()
+
+TeleportTo(true ,-35, 100, -442)
+
+end})
+
+local Tab = Window:MakeTab({
     Name = "其他功能",
     Icon = "rbxassetid://14250466898",
     PremiumOnly = false
@@ -294,8 +497,6 @@ local Tab = Window:MakeTab({
 Tab:AddButton({
     Name = "踏空行走",
     Callback = function()
-    
-    
     
 -- 半透明红色移动平台 (Gemini UI 风格)
 local Players = game:GetService("Players")
