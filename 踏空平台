@@ -1,0 +1,199 @@
+-- 半透明红色移动平台 (Gemini UI 风格)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local player = Players.LocalPlayer
+
+-- 平台参数
+local PLATFORM_SIZE = Vector3.new(20, 1, 20)
+local PLATFORM_COLOR = Color3.fromRGB(255, 0, 0)
+local PLATFORM_TRANSPARENCY = 0.9
+
+-- 平台状态
+local isPlatformActive = false
+local platformPart = nil
+local fixedY = 0
+local heartBeatConnection = nil
+
+-- ========== 创建 GUI ==========
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.Name = "PlatformGUI"
+screenGui.ResetOnSpawn = false
+
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Name = "Main"
+mainFrame.Size = UDim2.new(0, 130, 0, 80)
+mainFrame.Position = UDim2.new(0.05, 0, 0.05, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+mainFrame.BackgroundTransparency = 0.5
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.ClipsDescendants = true
+
+local uiCorner = Instance.new("UICorner", mainFrame)
+uiCorner.CornerRadius = UDim.new(0, 20)
+
+local stroke = Instance.new("UIStroke", mainFrame)
+stroke.Color = Color3.new(1, 1, 1)
+stroke.Transparency = 0.8
+stroke.Thickness = 1.2
+
+local title = Instance.new("TextLabel", mainFrame)
+title.Size = UDim2.new(1, 0, 0, 35)
+title.Position = UDim2.new(0, 0, 0, 2)
+title.BackgroundTransparency = 1
+title.Text = "移动平台"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
+title.TextTransparency = 0.2
+
+local btn = Instance.new("TextButton", mainFrame)
+btn.Name = "Toggle"
+btn.Size = UDim2.new(0.8, 0, 0, 32)
+btn.Position = UDim2.new(0.1, 0, 0.48, 0)
+btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+btn.Text = "平台：关"
+btn.TextColor3 = Color3.new(1, 1, 1)
+btn.Font = Enum.Font.GothamBold
+btn.TextSize = 12
+Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
+
+-- 果冻拖拽效果
+local function setupGelly()
+    local dragging = false
+    local dragStart, startPos
+
+    mainFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+
+            TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, 145, 0, 90),
+                BackgroundTransparency = 0.4
+            }):Play()
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+            TweenService:Create(mainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, 130, 0, 80),
+                BackgroundTransparency = 0.5
+            }):Play()
+        end
+    end)
+end
+setupGelly()
+
+-- ========== 平台逻辑 ==========
+local function destroyPlatform()
+    if platformPart then
+        platformPart:Destroy()
+        platformPart = nil
+    end
+    if heartBeatConnection then
+        heartBeatConnection:Disconnect()
+        heartBeatConnection = nil
+    end
+end
+
+local function createPlatform()
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        return false
+    end
+
+    local rootPart = character.HumanoidRootPart
+    fixedY = rootPart.Position.Y - rootPart.Size.Y / 2 - 3   -- 脚底高度
+
+    platformPart = Instance.new("Part")
+    platformPart.Name = "LocalPlatform"
+    platformPart.Size = PLATFORM_SIZE
+    platformPart.Anchored = true
+    platformPart.CanCollide = true
+    platformPart.Color = PLATFORM_COLOR
+    platformPart.Transparency = PLATFORM_TRANSPARENCY
+    platformPart.Parent = workspace
+    platformPart.CFrame = CFrame.new(rootPart.Position.X, fixedY, rootPart.Position.Z)
+
+    heartBeatConnection = RunService.Heartbeat:Connect(function()
+        if not platformPart then return end
+        local char = player.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            local hrp = char.HumanoidRootPart
+            platformPart.CFrame = CFrame.new(hrp.Position.X, fixedY, hrp.Position.Z)
+        end
+    end)
+
+    return true
+end
+
+local function updateButton()
+    if isPlatformActive then
+        btn.Text = "平台：开"
+        btn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+    else
+        btn.Text = "平台：关"
+        btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    end
+end
+
+local function togglePlatform()
+    if isPlatformActive then
+        isPlatformActive = false
+        destroyPlatform()
+    else
+        isPlatformActive = true
+        createPlatform()
+    end
+    updateButton()
+end
+
+-- 处理重生自动重建
+local function onCharacterAdded(character)
+    if isPlatformActive and not platformPart then
+        local hrp = character:WaitForChild("HumanoidRootPart", 10)
+        if hrp then
+            if fixedY == 0 then
+                fixedY = hrp.Position.Y - hrp.Size.Y / 2 -3
+            end
+            platformPart = Instance.new("Part")
+            platformPart.Name = "LocalPlatform"
+            platformPart.Size = PLATFORM_SIZE
+            platformPart.Anchored = true
+            platformPart.CanCollide = true
+            platformPart.Color = PLATFORM_COLOR
+            platformPart.Transparency = PLATFORM_TRANSPARENCY
+            platformPart.Parent = workspace
+            platformPart.CFrame = CFrame.new(hrp.Position.X, fixedY, hrp.Position.Z)
+
+            heartBeatConnection = RunService.Heartbeat:Connect(function()
+                if not platformPart then return end
+                local char = player.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    local newHrp = char.HumanoidRootPart
+                    platformPart.CFrame = CFrame.new(newHrp.Position.X, fixedY, newHrp.Position.Z)
+                end
+            end)
+        end
+    end
+end
+
+player.CharacterAdded:Connect(onCharacterAdded)
+if player.Character then
+    onCharacterAdded(player.Character)
+end
+
+btn.MouseButton1Click:Connect(togglePlatform)
