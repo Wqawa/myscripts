@@ -441,7 +441,7 @@ Title = "踏空行走",
 Desc = "(额外代码)",
 Locked = false,
 Callback = function()
-
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Wqawa/myscripts/refs/heads/main/%E8%B8%8F%E7%A9%BA%E5%B9%B3%E5%8F%B0"))()
 end
 })
 local Input = Tab:Input({
