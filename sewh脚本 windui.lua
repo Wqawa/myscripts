@@ -1,7 +1,7 @@
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Wqawa/myscripts/refs/heads/main/windUI%20main.lua"))()
 
-local s_v = "v 0.3 demo2"
-local s_data = "2026/5/29"
+local s_v = "v 0.3 demo3"
+local s_data = "2026/6/13"
 
 local time = 0.05
 
@@ -9,76 +9,151 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- 删除并持续监听指定对象的生成
-local map = workspace:FindFirstChild("Map")
 
-if not map then
-warn("workspace.Map 不存在")
-return
+
+local function initAntiRagdoll()
+local replicatedStorage = game:GetService("ReplicatedStorage")
+local runService = game:GetService("RunService")
+
+local function waitForModules()
+local bodyTrauma, ragdollClient = nil, nil
+local startTime = tick()
+repeat
+task.wait(0.2)
+local resources = replicatedStorage:FindFirstChild("Resources")
+if resources then
+local client = resources:FindFirstChild("Client")
+if client then
+local bt = client:FindFirstChild("BodyTrauma")
+if bt then
+local rc = bt:FindFirstChild("RagdollClient")
+if rc then
+bodyTrauma = require(bt)
+ragdollClient = require(rc)
+end
+end
+end
+end
+until (bodyTrauma and ragdollClient) or (tick() - startTime > 10)
+return bodyTrauma, ragdollClient
 end
 
--- 辅助函数：等待父级出现，然后监听指定名称的子对象
-local function watchChild(parentPath, childName)
--- parentPath 是一个表，表示从 workspace.Map 开始的路径，例如 {"Constant"} 或 {"Environment", "Ocean"}
-local function findParent()
-local current = map
-for _, part in ipairs(parentPath) do
-current = current and current:FindFirstChild(part)
-if not current then break end
-end
-return current
+local bodyTrauma, ragdollClient = waitForModules()
+if not bodyTrauma or not ragdollClient then
+return { setEnabled = function() end }
 end
 
--- 先尝试获取已存在的父级
-local parent = findParent()
-if not parent then
--- 如果父级不存在，等待它出现
-local conn
-conn = map.ChildAdded:Connect(function(child)
-if child.Name == parentPath[1] then
--- 第一级出现，继续向下查找完整路径
-    local fullParent = findParent()
-if fullParent then
-            conn:Disconnect()
-    parent = fullParent
-    -- 建立监听
-    parent.ChildAdded:Connect(function(grandChild)
-        if grandChild.Name == childName then
-                    grandChild:Destroy()
-            print("已删除重新生成的 " .. childName)
-        end
-    end)
-    -- 同时删除可能已存在但未处理的（例如删除时如果父级刚出现但子已存在）
-        local existing = parent:FindFirstChild(childName)
-    if existing then existing:Destroy() end
+if not _G._antiRagdoll_original then
+_G._antiRagdoll_original = {
+ragdoll = bodyTrauma.Ragdoll,
+unragdoll = bodyTrauma.Unragdoll,
+bounce = bodyTrauma.Bounce,
+}
+end
+
+local noop = function() end
+local enabled = false
+local heartbeatConn = nil
+
+local function forceUnragdoll()
+if ragdollClient.ragdolled then
+local char = player.Character
+if char then
+local humanoid = char:FindFirstChild("Humanoid")
+if humanoid and humanoid.Health > 0 then
+humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, true)
+humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+local movementHandler = require(replicatedStorage.Resources.Client.MovementHandler)
+if movementHandler then
+pcall(movementHandler.RemoveDisabler, "RagdolledNoSprint")
+pcall(movementHandler.RemoveDisabler, "RagdolledNoSit")
+pcall(movementHandler.RemoveDisabler, "RagdolledNoSwim")
+end
+local visual = require(replicatedStorage.Resources.Client.BodyTrauma.RagdollInfluenceVisual)
+if visual then pcall(visual.Disconnect) end
+ragdollClient.ragdolled = false
+if ragdollClient.ragdollSignal then
+ragdollClient.ragdollSignal:Fire(false)
 end
 end
-end)
--- 设置超时，避免永久等待（可选）
-task.wait(10)
-if conn then conn:Disconnect() end
+end
+end
+end
+
+local function clearSemiStun()
+if not enabled then return end
+game:GetService("ReplicatedStorage"):WaitForChild("Communication"):WaitForChild("Packets"):WaitForChild("Packet"):WaitForChild("RemoteEvent"):FireServer(buffer.fromstring("\000\000"))
+end
+
+local function setEnabled(state)
+enabled = state
+if enabled then
+bodyTrauma.Ragdoll = noop
+bodyTrauma.Unragdoll = noop
+bodyTrauma.Bounce = noop
+forceUnragdoll()
+if heartbeatConn then heartbeatConn:Disconnect() end
+heartbeatConn = runService.Heartbeat:Connect(clearSemiStun)
 else
--- 父级已存在，建立监听
-parent.ChildAdded:Connect(function(child)
-if child.Name == childName then
-child:Destroy()
-print("已删除重新生成的 " .. childName)
-end
-end)
--- 删除已存在的对象
-local existing = parent:FindFirstChild(childName)
-if existing then existing:Destroy() end
+local orig = _G._antiRagdoll_original
+bodyTrauma.Ragdoll = orig.ragdoll
+bodyTrauma.Unragdoll = orig.unragdoll
+bodyTrauma.Bounce = orig.bounce
+if heartbeatConn then heartbeatConn:Disconnect(); heartbeatConn = nil end
 end
 end
 
--- 1. 监听 workspace.Map.Constant.StopFall
-watchChild({"Constant"}, "StopFall")
+return { setEnabled = setEnabled }
+end
 
--- 2. 监听 workspace.Map.TopHeight（直接子级）
-watchChild({}, "TopHeight")  -- 空表表示 map 本身
+local function initAntiFall()
+local replicatedStorage = game:GetService("ReplicatedStorage")
 
--- 3. 监听 workspace.Map.Environment.Ocean.FallReigons
-watchChild({"Environment", "Ocean"}, "FallReigons")
+local function waitForBodyTrauma()
+local bodyTrauma = nil
+local startTime = tick()
+repeat
+task.wait(0.2)
+local resources = replicatedStorage:FindFirstChild("Resources")
+if resources then
+local client = resources:FindFirstChild("Client")
+if client then
+local bt = client:FindFirstChild("BodyTrauma")
+if bt then
+bodyTrauma = require(bt)
+end
+end
+end
+until bodyTrauma or (tick() - startTime > 10)
+return bodyTrauma
+end
+
+local bodyTrauma = waitForBodyTrauma()
+if not bodyTrauma then
+return { setEnabled = function() end }
+end
+
+if not _G._antiFall_original then
+_G._antiFall_original = bodyTrauma.Fall
+end
+
+local noop = function() end
+local enabled = false
+
+local function setEnabled(state)
+enabled = state
+if enabled then
+bodyTrauma.Fall = noop
+else
+bodyTrauma.Fall = _G._antiFall_original
+end
+end
+
+return { setEnabled = setEnabled }
+end
+
+local antiRagdoll = initAntiRagdoll()
+local antiFall = initAntiFall()
 
 
 local function TeleportTo(Map , x, y, z)
@@ -290,6 +365,62 @@ local targetPos = closest.Position + Vector3.new(0, 3, 0)
 rootPart.CFrame = CFrame.new(targetPos)
 end
 
+if Map == 'foglamps' then
+local function getModelCFrame(model)
+if model:IsA("BasePart") then
+return model.CFrame
+end
+if model:IsA("Model") then
+if model.PrimaryPart then
+return model.PrimaryPart.CFrame
+end
+for _, child in ipairs(model:GetDescendants()) do
+if child:IsA("BasePart") then
+        return child.CFrame
+end
+end
+end
+return nil
+end
+
+local function getAllFogLamps()
+local mapObjects = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Objects")
+if not mapObjects then return {} end
+
+local lamps = {}
+for _, child in ipairs(mapObjects:GetChildren()) do
+if child.Name:find("FogLamp") then
+table.insert(lamps, child)
+end
+end
+return lamps
+end
+
+local function teleportToRandomLamp()
+local lamps = getAllFogLamps()
+if #lamps == 0 then
+return
+end
+
+local target = lamps[math.random(1, #lamps)]
+local targetCF = getModelCFrame(target)
+if not targetCF then
+return
+end
+
+local char = localPlayer.Character
+if char then
+local root = char:FindFirstChild("HumanoidRootPart")
+if root then
+root.CFrame = targetCF
+end
+end
+end
+
+   
+teleportToRandomLamp()
+end
+
 if Map == nil then
 rootPart.CFrame = targetCFrame
 end
@@ -351,14 +482,12 @@ dotCorner.Parent = dot
 
 
 
--- LocalScript: 触控按钮选择器 + 拖动/缩放（修复版）
 
 local UserInputService = game:GetService("UserInputService")
 
 
 local playerGui = player:WaitForChild("PlayerGui")
 
--- ====== 1. 目标按钮路径 ======
 local buttonPaths = {
 { path = {"TouchGui", "TouchControlFrame", "JumpButton"}, name = "JumpButton" },
 { path = {"TouchCore", "TouchControls", "AltUseButton"}, name = "AltUseButton" },
@@ -368,7 +497,6 @@ local buttonPaths = {
 { path = {"TouchCore", "TouchControls", "UseButton"}, name = "UseButton" },
 }
 
--- ====== 2. 一次性记录按钮原始数据（位置、大小、颜色等） ======
 local buttonData = {}
 local currentSelected = nil
 local originalRecorded = false   -- 确保只记录一次
@@ -396,7 +524,6 @@ end
 local origActive = true
 if obj:IsA("GuiButton") then origActive = obj.Active end
 
--- ★ 关键：记录原始位置和大小（一次性的）
 local originalPosition = obj.Position
 local originalSize = obj.Size
 
@@ -409,15 +536,12 @@ originalActive = origActive,
 originalPosition = originalPosition,
 originalSize = originalSize,
 }
-print("已记录按钮:", info.name, "位置:", originalPosition, "大小:", originalSize)
 else
-warn("Button not found:", info.name)
 end
 end
 originalRecorded = true
 end
 
--- ====== 3. 按钮高亮/交互控制 ======
 local function setButtonHighlight(name, enable)
 local data = buttonData[name]
 if not data then return end
@@ -447,7 +571,6 @@ end
 
 
 
--- 调整选中按钮大小
 function scaleSelectedButton(factor)
 if not currentSelected then return end
 local data = buttonData[currentSelected]
@@ -455,13 +578,11 @@ if not data then return end
 local btn = data.object
 local curSizeX = btn.Size.X.Offset
 local curSizeY = btn.Size.Y.Offset
--- 最小尺寸限制
 local newX = math.max(10, curSizeX * factor)
 local newY = math.max(10, curSizeY * factor)
 btn.Size = UDim2.new(btn.Size.X.Scale, newX, btn.Size.Y.Scale, newY)
 end
 
--- ====== 5. 模式状态 ======
 local isSelectionMode = false
 
 
@@ -486,7 +607,6 @@ resetGestureState()
 
 end
 
--- ====== 6. 触摸命中检测 ======
 local function isInside(guiObject, position)
 local absPos = guiObject.AbsolutePosition
 local absSize = guiObject.AbsoluteSize
@@ -503,12 +623,10 @@ end
 return nil
 end
 
--- 安全转换为 Vector2
 local function toVector2(vec3)
 return Vector2.new(vec3.X, vec3.Y)
 end
 
--- ====== 7. 手势变量 ======
 local draggingTouch = nil
 local dragStartPos = nil       -- Vector2
 local dragStartOffset = nil    -- Vector2
@@ -528,7 +646,6 @@ pinchButtonStartSize = nil
 pinchButtonStartPos = nil
 end
 
--- ====== 重置所有按钮为原始位置/大小 ======
 local function resetAllButtonPositions()
 for name, data in pairs(buttonData) do
 local btn = data.object
@@ -537,7 +654,6 @@ btn.Position = data.originalPosition
 btn.Size = data.originalSize
 end
 end
--- 清除当前选中和高亮
 if currentSelected then
 setButtonHighlight(currentSelected, false)
 currentSelected = nil
@@ -555,7 +671,6 @@ local btn = buttonData[currentSelected].object
 draggingTouch = touchId
 dragStartPos = toVector2(touchPos)
 dragStartOffset = Vector2.new(btn.Position.X.Offset, btn.Position.Y.Offset)
--- 清空缩放状态
 pinchTouches = {}
 pinchInitialDist = nil
 end
@@ -567,7 +682,6 @@ pinchTouches[t2] = toVector2(pos2)
 pinchInitialDist = (toVector2(pos1) - toVector2(pos2)).Magnitude
 pinchButtonStartSize = Vector2.new(btn.Size.X.Offset, btn.Size.Y.Offset)
 pinchButtonStartPos = Vector2.new(btn.Position.X.Offset, btn.Position.Y.Offset)
--- 清空拖动状态
 draggingTouch = nil
 dragStartPos = nil
 end
@@ -601,7 +715,6 @@ btn.Size = UDim2.new(btn.Size.X.Scale, newSizeX, btn.Size.Y.Scale, newSizeY)
 btn.Position = UDim2.new(btn.Position.X.Scale, newOffsetX, btn.Position.Y.Scale, newOffsetY)
 end
 
--- ====== 8. 触摸事件处理 ======
 UserInputService.TouchStarted:Connect(function(touch, gameProcessed)
 if not isSelectionMode then return end
 
@@ -609,12 +722,10 @@ local btnName = getButtonUnderPosition(touch.Position)
 
 if btnName then
 if btnName == currentSelected then
--- 已选中，尝试开始手势
 if not draggingTouch and next(pinchTouches) == nil then
 startDrag(touch, touch.Position)
 end
 else
--- 选中新按钮
 clearAllHighlights()
 currentSelected = btnName
 setButtonHighlight(btnName, true)
@@ -627,10 +738,8 @@ else
 return
 end
 
--- 双指缩放检查
 if currentSelected and draggingTouch and btnName == currentSelected then
 if touch ~= draggingTouch and isInside(buttonData[currentSelected].object, touch.Position) then
--- 准备转为缩放，记录第二个触摸位置
 pinchTouches[touch] = toVector2(touch.Position)
 if pinchTouches[draggingTouch] then
 startPinch(draggingTouch, touch, pinchTouches[draggingTouch], touch.Position)
@@ -642,15 +751,12 @@ end)
 UserInputService.TouchMoved:Connect(function(touch, gameProcessed)
 if not isSelectionMode or not currentSelected then return end
 
--- 更新双指记录
 if pinchTouches[touch] then
 pinchTouches[touch] = toVector2(touch.Position)
 end
 
--- 拖动处理
 if draggingTouch == touch then
 if next(pinchTouches) then
--- 有第二个手指，转为缩放
 local otherTouch = nil
 for tid, pos in pairs(pinchTouches) do
 if tid ~= touch then otherTouch = tid; break end
@@ -663,7 +769,6 @@ end
 updateDrag(touch.Position)
 end
 
--- 缩放处理
 if pinchTouches[touch] and next(pinchTouches) then
 local ids = {}
 for tid, pos in pairs(pinchTouches) do
@@ -742,7 +847,6 @@ Title = "SEWH Script",
 Icon = "door-open", -- lucide icon
 Author = "By wq_fury",
 
--- ↓ This all is Optional. You can remove it.
 Size = UDim2.fromOffset(580, 460),
 MinSize = Vector2.new(50, 30),
 MaxSize = Vector2.new(950, 560),
@@ -758,7 +862,6 @@ ScrollBarEnabled = true,
 Background = "rbxassetid://84946325310689", -- rbxassetid
 
 
--- ↓ Optional. You can remove it.
 User = {
 Enabled = true,
 Anonymous = false,
@@ -804,39 +907,63 @@ Locked = false,
 })
 local Tab = Window:Tab({Title = "主要功能",Icon = "monitor-check", Locked = false,})
 
+
 local Toggle = Tab:Toggle({
 Title = "反布娃娃",
-Desc = "尽可能的不让你进入布娃娃状态，但是很吵…",
-Icon = "check",
+Desc = "*那个人不会晕怎么玩啊……",
+Icon = "shield",
 Type = "Checkbox",
-Value = false, -- default value
-Callback = function(state) 
-local anit_ragroll = nil
-
-if state then
-anit_ragroll = task.spawn(function()
-while state do
-game:GetService("ReplicatedStorage"):WaitForChild("Communication"):WaitForChild("Packets"):WaitForChild("Packet"):WaitForChild("RemoteEvent"):FireServer(buffer.fromstring("\000\000"))
-wait(time)
-end
-end)
-else
-if anit_ragroll then
-task.cancel(anit_ragroll)
-anit_ragroll = nil
-end
-end
-
+Value = false,
+Callback = function(state)
+antiRagdoll.setEnabled(state)
 end
 })
 
+local Toggle = Tab:Toggle({
+Title = "反边界",
+Desc = "禁止高处坠落死亡或掉落伤害",
+Icon = "falling",
+Type = "Checkbox",
+Value = false,
+Callback = function(state)
+antiFall.setEnabled(state)
+end
+})
 
-local Button = Tab:Button({
-Title = "无限体力(暂不可用)",
-Desc = "暂时不知道为什么,可能SEWH修改了",
-Locked = false,
-Callback = function()
-loadstring(game:HttpGet("https://rawscripts.net/raw/UPD-something-evil-will-happen-Inf-stamina-57438"))()
+local staminaLoopThread = nil
+local staminaEnabled = false
+
+local Toggle = Tab:Toggle({
+Title = "无限体力",
+Desc = "强势回归",
+Icon = "check",
+Type = "Checkbox",
+Value = false,
+Callback = function(state)
+staminaEnabled = state
+if staminaEnabled then
+if staminaLoopThread then task.cancel(staminaLoopThread) end
+staminaLoopThread = task.spawn(function()
+local rs = game:GetService("ReplicatedStorage")
+local stamina = require(rs.Resources.Client.MovementHandler.Stamina)
+local cd = false
+while staminaEnabled do
+task.wait(0.1)
+if stamina.Get() <= 100 and not cd then
+cd = true
+stamina.DrainStamina(-100, 0, true)
+stamina.DestroyDrainer("BaseDrain")
+task.wait(0.1)
+cd = false
+end
+end
+end)
+else
+if staminaLoopThread then
+task.cancel(staminaLoopThread)
+staminaLoopThread = nil
+end
+end
 end
 })
 
@@ -869,7 +996,6 @@ Desc = "恢复为原始位置",
 Locked = false,
 Callback = function()
 resetAllButtonPositions()
--- 如果编辑模式开启，刷新一下状态
 if isSelectionMode then
 exitSelectionMode()
 enterSelectionMode()
@@ -891,7 +1017,7 @@ Tab:Divider()
 
 local Button = Tab:Button({Title = "随机水缸",Desc = "修饰符回合",Locked = false,Callback = function() TeleportTo('watergang') end})
 local Button = Tab:Button({Title = "最近的椅子",Desc = "修饰符回合",Locked = false,Callback = function() TeleportTo('chair') end })
-
+local Button = Tab:Button({Title = "随机路灯",Desc = "灾难回合",Locked = false,Callback = function() TeleportTo('foglamps') end })
 Tab:Divider()
 
 local Button = Tab:Button({Title = "中场",Desc = "高地特殊回合",Locked = false,Callback = function() TeleportTo('the_height' ,-45, 53, -161) end})
@@ -965,7 +1091,6 @@ game:GetService("ReplicatedStorage"):WaitForChild("Communication"):WaitForChild(
 
 local VirtualInputManager = game:GetService("VirtualInputManager")
 
--- 等待按钮路径完全加载
 local playButton = playerGui:WaitForChild("TitleScreen")
 playButton = playButton:WaitForChild("Screens")
 playButton = playButton:WaitForChild("Main")
@@ -973,17 +1098,14 @@ playButton = playButton:WaitForChild("MainArea")
 playButton = playButton:WaitForChild("MainButtons")
 playButton = playButton:WaitForChild("PlayButton")
 
--- 确保按钮已渲染（有时 AbsolutePosition 在下一帧才更新）
 wait(0.5)
 
 local absPos = playButton.AbsolutePosition
 local absSize = playButton.AbsoluteSize
 
--- 计算按钮中心坐标
 local centerX = absPos.X + absSize.X / 2
 local centerY = absPos.Y + absSize.Y / 2
 
--- 模拟鼠标左键按下和释放
 VirtualInputManager:SendMouseButtonEvent(centerX, centerY+50, 0, true, nil, 0)   -- 按下
 wait(0.05)
 VirtualInputManager:SendMouseButtonEvent(centerX, centerY+50, 0, false, nil, 0)  -- 释放
@@ -997,6 +1119,4 @@ Variant = "Primary",
 
 
 })
-
-
 
