@@ -1067,6 +1067,25 @@ Callback = function()
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Wqawa/myscripts/refs/heads/main/%E8%B8%8F%E7%A9%BA%E5%B9%B3%E5%8F%B0"))()
 end
 })
+
+local Button = Tab:Button({
+Title = "位置记录器",
+Desc = "(额外代码)",
+Locked = false,
+Callback = function()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Wqawa/myscripts/refs/heads/main/%E4%BD%8D%E7%BD%AE%E8%AE%B0%E5%BD%95.lua"))()
+end
+})
+
+local Button = Tab:Button({
+Title = "玩家传送器",
+Desc = "(额外代码)",
+Locked = false,
+Callback = function()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Wqawa/myscripts/refs/heads/main/%E8%BA%AB%E5%90%8E%E4%BC%A0%E9%80%81%E5%99%A8.lua"))()
+end
+})
+
 local Input = Tab:Input({
 Title = "跳跃高度",
 Desc = "顾名思义,就是调你的跳跃高度,但是太大会进入布娃娃,并且地图上方也有销毁哦",
