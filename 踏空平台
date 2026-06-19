@@ -6,9 +6,9 @@ local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 
 -- 平台参数
-local PLATFORM_SIZE = Vector3.new(20, 1, 20)
+local PLATFORM_SIZE = Vector3.new(10, 1, 10)
 local PLATFORM_COLOR = Color3.fromRGB(255, 0, 0)
-local PLATFORM_TRANSPARENCY = 0.9
+local PLATFORM_TRANSPARENCY = 0.5
 
 -- 平台状态
 local isPlatformActive = false
