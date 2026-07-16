@@ -1,9 +1,7 @@
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Wqawa/myscripts/refs/heads/main/windUI%20main.lua"))()
 
-local scriptVersion = "v 0.3 demo6"
-local scriptDate = "2026/6/23"
-
-local selectedEmote = "KontonBoogie"    --你怎么知道我最喜欢的是混沌布吉？？
+local scriptVersion = "v 0.31 rework p1"
+local scriptDate = "2026/7/15"
 
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
@@ -12,7 +10,19 @@ local playerGui = player:WaitForChild("PlayerGui")
 if tostring(game.PlaceId) == "16991287194" then
 
 --载入功能
+local selectedEmote = "KontonBoogie" --你怎么知道我最喜欢的是混沌布吉？？(占位符)
 
+--按钮路径
+local touchButtonPaths = {
+{ path = {"TouchGui", "TouchControlFrame", "JumpButton"}, name = "JumpButton" },
+{ path = {"TouchCore", "TouchControls", "AltUseButton"}, name = "AltUseButton" },
+{ path = {"TouchCore", "TouchControls", "LockButton"}, name = "LockButton" },
+{ path = {"TouchCore", "TouchControls", "EmoteButton"}, name = "EmoteButton" },
+{ path = {"TouchCore", "TouchControls", "SprintButton"}, name = "SprintButton" },
+{ path = {"TouchCore", "TouchControls", "UseButton"}, name = "UseButton" },
+}
+
+--背包内容黑名单
 local LIMB_NAMES = {
 "Head", "Torso", "Left Arm", "Right Arm",
 "Left Leg", "Right Leg", "HumanoidRootPart",
@@ -20,6 +30,172 @@ local LIMB_NAMES = {
 "Sleigh", "broom", "Model", "JeepCar", "boombox",
 "Stuff", "Recorder", "Potion", "Props", "prop", "skeleton"
 }
+
+--================================================================================================================================
+--音效模块
+--================================================================================================================================
+
+local function playSound(v)
+local Sound = Instance.new("Sound")
+Sound.SoundId = "rbxassetid://4590662766"
+Sound.Parent = game:GetService("SoundService")
+Sound.Volume = v
+Sound:Play()
+Sound.Ended:Wait()
+Sound:Destroy()
+end
+
+--================================================================================================================================
+--解析模块(下属传送模块,fog灾难查找需要)
+--================================================================================================================================
+
+local function getModelCFrame(model)
+if model:IsA("BasePart") then
+return model.CFrame
+end
+if model:IsA("Model") then
+if model.PrimaryPart then
+return model.PrimaryPart.CFrame
+end
+for _, child in ipairs(model:GetDescendants()) do
+if child:IsA("BasePart") then
+return child.CFrame
+end
+end
+end
+return nil
+end
+
+local function getAllFogLamps()
+local mapObjects = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Objects")
+if not mapObjects then return {} end
+
+local lamps = {}
+for _, child in ipairs(mapObjects:GetChildren()) do
+if child.Name:find("FogLamp") then
+table.insert(lamps, child)
+end
+end
+return lamps
+end
+
+--================================================================================================================================
+--翻译模块(BY yore)
+--================================================================================================================================
+-- 翻译加载器：每次注入对比远程与本地，不同则自动更新，并用 WindUI 通知状态
+local function loadTranslation(url, cacheFileName)
+local localContent = nil
+local hasLocal = pcall(function() localContent = readfile("SEWH Script/" .. cacheFileName) end)
+local localStr = hasLocal and localContent or nil
+
+local function notify(msg, icon)
+icon = icon or "info"
+WindUI:Notify({
+Title = "翻译缓存",
+Content = msg,
+Duration = 2.5,
+Icon = icon,
+})
+playSound(5)
+end
+
+local networkOk, remoteContent = pcall(game.HttpGet, game, url)
+if networkOk and remoteContent and remoteContent ~= "" then
+if localStr == remoteContent then
+-- 内容一致，直接加载本地
+print("[SEWH 翻译] 远程与本地一致，加载本地缓存:", cacheFileName)
+notify("远程与本地一致，加载本地缓存: " .. cacheFileName, "check")
+local ok, result = pcall(loadstring, localStr)
+if ok and result then
+return result()
+else
+print("[SEWH 翻译 报错] 本地缓存解析失败，尝试加载远程")
+notify("本地缓存损坏，尝试加载远程", "warning")
+local ok2, result2 = pcall(loadstring, remoteContent)
+if ok2 and result2 then
+pcall(function() writefile("SEWH Script/" .. cacheFileName, remoteContent) end)
+return result2()
+end
+end
+else
+-- 内容不一致，自动下载覆盖
+print("[SEWH 翻译] 远程内容已更新，下载并覆盖缓存:", cacheFileName)
+notify("远程内容已更新，自动下载: " .. cacheFileName, "download")
+pcall(function()
+makefolder("SEWH Script")
+writefile("SEWH Script/" .. cacheFileName, remoteContent)
+end)
+local ok, result = pcall(loadstring, remoteContent)
+if ok and result then
+return result()
+else
+print("[SEWH 翻译 报错] 远程内容解析失败，尝试本地缓存")
+notify("远程内容解析失败，尝试本地缓存", "error")
+end
+end
+else
+print("[SEWH 翻译] 网络请求失败，尝试读取本地缓存")
+notify("网络请求失败，尝试读取本地缓存", "warning")
+end
+
+-- 网络失败或远程不可用，使用本地缓存
+if localStr and localStr ~= "" then
+local ok, result = pcall(loadstring, localStr)
+if ok and result then
+print("[SEWH 翻译] 加载本地缓存成功:", cacheFileName)
+notify("加载本地缓存成功: " .. cacheFileName, "check")
+return result()
+else
+print("[SEWH 翻译 报错] 本地缓存解析失败")
+notify("本地缓存解析失败", "error")
+end
+end
+
+print("[SEWH 翻译] 无法加载翻译，使用空表")
+notify("无法加载翻译，将显示原始名称", "error")
+return {}
+end
+
+itemTranslations = loadTranslation(
+"https://raw.githubusercontent.com/Yore-Clouds/SEWH_Translation/refs/heads/main/items_translation.lua",
+"items_translation.lua"
+)
+
+emoteTranslations = loadTranslation(
+"https://raw.githubusercontent.com/Yore-Clouds/SEWH_Translation/refs/heads/main/emotes_translation.lua",
+"emotes_translation.lua"
+)
+
+--================================================================================================================================
+--背包内容模块
+--================================================================================================================================
+local itemColorRules = {
+
+{ keywords = {"Banana Peel", "Beartrap", "Bloxilicious Bubblegum", "Body Swap Potion", "Car Keys", "Crowbar", "Detonator", "Dynamite", "Exploding Pie" ,"Gear Suppressor", "Molotov", "RAIG Table", "Shrink Ray", "Slap Hand", "Snowball", "Stroller", "Stun Gun", "Subspace Tripmine", "Superball", "Timebomb", "Triple Kunai", "Vine Staff", "Water Balloon", "Witches Brew", "Wooden Sword","Breath of Ice","Excalibur", "Excalibur Jr", "Knife"}, color = Color3.new(1, 0, 0) },
+
+{ keywords = {"Celestial Staff", "Epic Brew", "Teddy Bloxpin", "Deck O\' Cards", "Gravity Pad", "Speed Pad", "Crowbar"}, color = Color3.new(1, 0.85, 0) },
+
+{ keywords = {"Beast Scythe", "Bugle of Inspiration", "Epic Mine Pwner", "Fire Extinguisher", "Necrobloxicon", "Staff of Healing", "Stratobloxxer", "Teapot Turret", "Trowel", "Candy Bucket", "Golden Egg", "Midas Spork"}, color = Color3.new(0, 1, 0) },
+
+{ keywords = {"Revolver"}, color = Color3.new(0, 0, 1) }
+}
+
+
+local function getItemColor(itemName)
+for _, rule in ipairs(itemColorRules) do
+for _, keyword in ipairs(rule.keywords) do
+if string.find(itemName, keyword, 1, true) then
+return rule.color
+end
+end
+end
+return Color3.new(1, 1, 1)
+end
+
+
+local function translateItemName(name)
+return itemTranslations[name] or name
+end
 
 local function isExcluded(item)
 for _, name in ipairs(LIMB_NAMES) do
@@ -58,9 +234,9 @@ label.Name = "Label"
 label.Size = UDim2.new(1, 0, 1, 0)
 label.BackgroundTransparency = 1
 label.TextScaled = true
-label.TextColor3 = Color3.new(1, 1, 1)
+label.TextColor3 = getItemColor(item.Name)
 label.TextStrokeTransparency = 0.5
-label.Text = item.Name
+label.Text = translateItemName(item.Name)
 label.Parent = tag
 
 tag.Parent = part
@@ -82,14 +258,20 @@ if not char then return end
 local head = char:FindFirstChild("Head")
 if not head then return end
 
-local tag = head:FindFirstChild("BackpackSummary")
-if not tag then
-tag = Instance.new("BillboardGui")
-tag.Name = "BackpackSummary"
-tag.Size = UDim2.new(0, 100, 0, 30)          
-tag.StudsOffset = Vector3.new(0, 4.5, 0)     
-tag.AlwaysOnTop = true
 
+local oldTag = head:FindFirstChild("BackpackSummary")
+if oldTag then oldTag:Destroy() end
+
+local items = targetPlayer.Backpack:GetChildren()
+if #items == 0 then return end
+
+
+local tag = Instance.new("BillboardGui")
+tag.Name = "BackpackSummary"
+tag.Size = UDim2.new(0, 150, 0, 30)
+tag.StudsOffset = Vector3.new(0, 6, 0)
+tag.AlwaysOnTop = true
+tag.Parent = head
 
 local bg = Instance.new("Frame")
 bg.Name = "Background"
@@ -99,30 +281,27 @@ bg.BackgroundTransparency = 0.5
 bg.BorderSizePixel = 0
 bg.Parent = tag
 
+local layout = Instance.new("UIListLayout")
+layout.FillDirection = Enum.FillDirection.Vertical
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+layout.VerticalAlignment = Enum.VerticalAlignment.Top
+layout.Padding = UDim.new(0, 2)
+layout.Parent = bg
+
+for _, item in ipairs(items) do
 local label = Instance.new("TextLabel")
-label.Name = "Label"
-label.Size = UDim2.new(1, 0, 1, 0)
+label.Size = UDim2.new(1, 0, 0, 16)
 label.BackgroundTransparency = 1
 label.TextScaled = true
-label.TextColor3 = Color3.new(1, 1, 1)
+label.TextColor3 = getItemColor(item.Name)
 label.TextStrokeTransparency = 0.5
-label.Parent = tag
-
-tag.Parent = head
+label.Text = translateItemName(item.Name)
+label.Parent = bg
 end
 
-local label = tag:FindFirstChild("Label")
-if not label then return end
-local items = targetPlayer.Backpack:GetChildren()
-if #items == 0 then
-label.Text = "空"
-else
-local names = {}
-for i = 1, #items do names[i] = items[i].Name end
-label.Text = table.concat(names, "\n")
-local lines = math.min(#items, 10)
-tag.Size = UDim2.new(0, 100, 0, 10 + lines * 12)  
-end
+
+local totalHeight = 4 + #items * 18
+tag.Size = UDim2.new(0, 150, 0, totalHeight)
 end
 
 local function refreshWorkspaceTags(targetPlayer)
@@ -134,68 +313,17 @@ createItemTag(child, targetPlayer)
 end
 end
 
-local function setupPlayer(targetPlayer)
-if targetPlayer == player then
+local allConnections = {}
+local enabled = false
+local loopRunning = false
+local loopThread = nil
 
-local function onBackpackChanged()
-local items = targetPlayer.Backpack:GetChildren()
-local names = {}
-for i = 1, #items do names[i] = items[i].Name end
-end
-targetPlayer.Backpack.ChildAdded:Connect(onBackpackChanged)
-targetPlayer.Backpack.ChildRemoved:Connect(onBackpackChanged)
-return
-end
-
-
-local containerConns = {}
-local function watchWorkspace()
-for _, c in ipairs(containerConns) do c:Disconnect() end
-containerConns = {}
-local container = workspace:FindFirstChild(targetPlayer.Name)
-if not container then return end
-local c1 = container.ChildAdded:Connect(function(child)
-createItemTag(child, targetPlayer)
-end)
-local c2 = container.ChildRemoved:Connect(function(child)
-removeItemTag(child)
-end)
-table.insert(containerConns, c1)
-table.insert(containerConns, c2)
-refreshWorkspaceTags(targetPlayer)
-end
-
-local wsAdded = workspace.ChildAdded:Connect(function(child)
-if child.Name == targetPlayer.Name then watchWorkspace() end
-end)
-watchWorkspace()
-
-local function onBackpackChanged()
-local items = targetPlayer.Backpack:GetChildren()
-local names = {}
-for i = 1, #items do names[i] = items[i].Name end
-updateHeadSummary(targetPlayer)
-end
-targetPlayer.Backpack.ChildAdded:Connect(onBackpackChanged)
-targetPlayer.Backpack.ChildRemoved:Connect(onBackpackChanged)
-
-targetPlayer.CharacterAdded:Connect(function(char)
-task.spawn(function()
-local head = char:WaitForChild("Head", 3)
-local humanoid = char:WaitForChild("Humanoid", 3)
-if head and humanoid then
-task.wait(0.1)
-updateHeadSummary(targetPlayer)
-refreshWorkspaceTags(targetPlayer)
-end
-end)
-end)
-
-task.spawn(updateHeadSummary, targetPlayer)
+local function trackConnection(conn)
+table.insert(allConnections, conn)
+return conn
 end
 
 local function cleanupAllTags()
-
 for _, plr in ipairs(Players:GetPlayers()) do
 if plr ~= player then
 local char = plr.Character
@@ -208,9 +336,8 @@ end
 end
 end
 end
-
 for _, container in ipairs(workspace:GetChildren()) do
-if container:IsA("Model") and container.Name ~= player.Name then
+if container:IsA("Model") then
 for _, child in ipairs(container:GetDescendants()) do
 if child.Name == "ItemNameTag" then
 child:Destroy()
@@ -220,17 +347,13 @@ end
 end
 end
 
-local backpackDisplayEnabled = true
-local loopRunning = false
-local loopThread = nil
-
-local function startBackpackLoop()
+local function startLoop()
 if loopRunning then return end
 loopRunning = true
 loopThread = task.spawn(function()
 while loopRunning do
 task.wait(0.1)
-if not backpackDisplayEnabled then break end
+if not enabled then break end
 for _, plr in ipairs(Players:GetPlayers()) do
 if plr ~= player then
 updateHeadSummary(plr)
@@ -243,7 +366,7 @@ loopThread = nil
 end)
 end
 
-local function stopBackpackLoop()
+local function stopLoop()
 if loopThread then
 loopRunning = false
 task.cancel(loopThread)
@@ -251,209 +374,90 @@ loopThread = nil
 end
 end
 
-local function initBackpackDisplay(enable)
-if enable then
-for _, plr in ipairs(Players:GetPlayers()) do
-task.spawn(setupPlayer, plr)
-end
-Players.PlayerAdded:Connect(setupPlayer)
-startBackpackLoop()
-else
-cleanupAllTags()
-stopBackpackLoop()
-end
-end
-
-
-
-
-local highlightEnabled = false
-local colorChangeEnabled = false
-local highlightCache = {}
-
-local function hasItem(plr, keyword)
-if not plr then return false end
-local backpack = plr.Backpack
-if backpack then
-for _, child in ipairs(backpack:GetChildren()) do
-if child.Name:lower():find(keyword:lower()) then
-return true
-end
-end
-end
-local char = plr.Character
-if char then
-for _, child in ipairs(char:GetChildren()) do
-if child:IsA("Tool") and child.Name:lower():find(keyword:lower()) then
-return true
-end
-end
-end
-return false
-end
-
-local function getPlayerColor(plr)
-if not colorChangeEnabled then
-return Color3.new(0, 1, 0)
-end
-if hasItem(plr, "knife") then
-return Color3.new(1, 0, 0)
-elseif hasItem(plr, "revolver") then
-return Color3.new(0, 0.5, 1)
-else
-return Color3.new(0, 1, 0)
-end
-end
-
-local function updateHighlightColor(plr)
-local hl = highlightCache[plr]
-if hl then
-local newColor = getPlayerColor(plr)
-if hl.FillColor ~= newColor then
-hl.FillColor = newColor
-end
-end
-end
-
-local function createHighlight(plr)
-if plr == player then return end
-local cached = highlightCache[plr]
-if cached then
-if cached.Parent and cached.Adornee == plr.Character then
-return
-else
-highlightCache[plr] = nil
-end
-end
-local char = plr.Character
-if not char then return end
-local humanoid = char:FindFirstChild("Humanoid")
-if not humanoid then
-humanoid = char:WaitForChild("Humanoid", 2)
-if not humanoid then return end
-end
-local old = char:FindFirstChild("ESP_Highlight")
-if old then old:Destroy() end
-local hl = Instance.new("Highlight")
-hl.Name = "ESP_Highlight"
-hl.FillColor = getPlayerColor(plr)
-hl.FillTransparency = 0.5
-hl.OutlineTransparency = 1
-hl.Adornee = char
-hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-hl.Parent = char
-highlightCache[plr] = hl
-return hl
-end
-
-local function removeHighlight(plr)
-local hl = highlightCache[plr]
-if hl then
-hl:Destroy()
-highlightCache[plr] = nil
-end
-local char = plr.Character
-if char then
-local old = char:FindFirstChild("ESP_Highlight")
-if old then old:Destroy() end
-end
-end
-
-local function clearAllHighlights()
-for plr, _ in pairs(highlightCache) do
-removeHighlight(plr)
-end
-end
-
-local function refreshAllHighlights()
-if not highlightEnabled then
-clearAllHighlights()
+local function setupPlayer(targetPlayer)
+if targetPlayer == player then
+trackConnection(targetPlayer.Backpack.ChildAdded:Connect(function() end))
+trackConnection(targetPlayer.Backpack.ChildRemoved:Connect(function() end))
 return
 end
-for _, plr in ipairs(Players:GetPlayers()) do
-if plr ~= player then
-if plr.Character then
-createHighlight(plr)
-updateHighlightColor(plr)
-else
-removeHighlight(plr)
-end
-end
-end
-end
 
-local highlightLoopRunning = false
-local highlightLoopThread = nil
+local containerConns = {}
+local function watchWorkspace()
+for _, c in ipairs(containerConns) do
+c:Disconnect()
+for i = #allConnections, 1, -1 do
+if allConnections[i] == c then table.remove(allConnections, i) end
+end
+end
+containerConns = {}
+local container = workspace:FindFirstChild(targetPlayer.Name)
+if not container then return end
 
-local function startHighlightLoop()
-if highlightLoopRunning then return end
-highlightLoopRunning = true
-highlightLoopThread = task.spawn(function()
-while highlightLoopRunning do
-task.wait(0.1)
-if not highlightEnabled then break end
-for _, plr in ipairs(Players:GetPlayers()) do
-if plr ~= player then
-if plr.Character then
-createHighlight(plr)
-updateHighlightColor(plr)
-else
-removeHighlight(plr)
-end
-end
-end
-end
-highlightLoopRunning = false
-highlightLoopThread = nil
+local c1 = container.ChildAdded:Connect(function(child)
+createItemTag(child, targetPlayer)
 end)
+local c2 = container.ChildRemoved:Connect(function(child)
+removeItemTag(child)
+end)
+table.insert(containerConns, c1)
+table.insert(containerConns, c2)
+trackConnection(c1)
+trackConnection(c2)
+refreshWorkspaceTags(targetPlayer)
 end
 
-local function stopHighlightLoop()
-if highlightLoopThread then
-highlightLoopRunning = false
-task.cancel(highlightLoopThread)
-highlightLoopThread = nil
-end
-end
+local wsAdded = workspace.ChildAdded:Connect(function(child)
+if child.Name == targetPlayer.Name then watchWorkspace() end
+end)
+trackConnection(wsAdded)
 
-local function initHighlight(enable)
-highlightEnabled = enable
-if enable then
-for _, plr in ipairs(Players:GetPlayers()) do
-if plr ~= player then
-plr.CharacterAdded:Connect(function()
-removeHighlight(plr)
-task.wait(0.1)
-if highlightEnabled then
+watchWorkspace()
+for _, c in ipairs(containerConns) do trackConnection(c) end
+
+local c3 = targetPlayer.Backpack.ChildAdded:Connect(function()
+updateHeadSummary(targetPlayer)
+end)
+local c4 = targetPlayer.Backpack.ChildRemoved:Connect(function()
+updateHeadSummary(targetPlayer)
+end)
+trackConnection(c3)
+trackConnection(c4)
+
+local c5 = targetPlayer.CharacterAdded:Connect(function(char)
 task.spawn(function()
-createHighlight(plr)
-updateHighlightColor(plr)
-end)
+local head = char:WaitForChild("Head", 3)
+local humanoid = char:WaitForChild("Humanoid", 3)
+if head and humanoid then
+task.wait(0.1)
+updateHeadSummary(targetPlayer)
+refreshWorkspaceTags(targetPlayer)
 end
 end)
-end
-end
-Players.PlayerRemoving:Connect(function(plr)
-removeHighlight(plr)
 end)
-refreshAllHighlights()
-startHighlightLoop()
+trackConnection(c5)
+
+task.spawn(updateHeadSummary, targetPlayer)
+end
+
+function initBackpackDisplay(enable)
+if enable == enabled then return end
+enabled = enable
+if enable then
+for _, plr in ipairs(Players:GetPlayers()) do setupPlayer(plr) end
+local paConn = Players.PlayerAdded:Connect(function(plr) setupPlayer(plr) end)
+trackConnection(paConn)
+startLoop()
 else
-clearAllHighlights()
-stopHighlightLoop()
+for _, conn in ipairs(allConnections) do conn:Disconnect() end
+allConnections = {}
+stopLoop()
+cleanupAllTags()
 end
 end
 
-
-local function playSound(v)
-local Sound = Instance.new("Sound")
-Sound.SoundId = "rbxassetid://4590662766"
-Sound.Parent = game:GetService("SoundService")
-Sound.Volume = v
-Sound:Play()
-Sound.Ended:Wait()
-Sound:Destroy()
-end
+--================================================================================================================================
+--表情模块
+--================================================================================================================================
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -462,44 +466,26 @@ local allEmotes = EmoteStorage.getAllEmotes()
 
 local allEmoteIds = {}
 for id, _ in pairs(allEmotes) do
-    table.insert(allEmoteIds, id)
+table.insert(allEmoteIds, id)
 end
 table.sort(allEmoteIds)
+
+local displayNames = {}
+local displayToId = {} 
+for _, id in ipairs(allEmoteIds) do
+local display = emoteTranslations[id] or id 
+table.insert(displayNames, display)
+displayToId[display] = id
+end
+
+table.sort(displayNames)
 
 local EmoteHandler = require(ReplicatedStorage.Resources.Client.EmoteHandler)
 
 
-
-local function getModelCFrame(model)
-if model:IsA("BasePart") then
-return model.CFrame
-end
-if model:IsA("Model") then
-if model.PrimaryPart then
-return model.PrimaryPart.CFrame
-end
-for _, child in ipairs(model:GetDescendants()) do
-if child:IsA("BasePart") then
-return child.CFrame
-end
-end
-end
-return nil
-end
-
-local function getAllFogLamps()
-local mapObjects = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Objects")
-if not mapObjects then return {} end
-
-local lamps = {}
-for _, child in ipairs(mapObjects:GetChildren()) do
-if child.Name:find("FogLamp") then
-table.insert(lamps, child)
-end
-end
-return lamps
-end
-
+--================================================================================================================================
+--反布娃娃模块
+--================================================================================================================================
 
 local function initAntiRagdoll()
 local replicatedStorage = game:GetService("ReplicatedStorage")
@@ -645,6 +631,12 @@ end
 local antiRagdollHandler = initAntiRagdoll()
 local antiFallHandler = initAntiFall()
 
+
+
+
+--================================================================================================================================
+--传送模块
+--================================================================================================================================
 
 local function teleportTo(Map , x, y, z)
 local character = player.Character
@@ -885,61 +877,12 @@ return true
 end
 
 
-local crosshairGui = Instance.new("ScreenGui")
-crosshairGui.Name = "CrosshairGui"
-crosshairGui.Parent = playerGui
-crosshairGui.ResetOnSpawn = false
-crosshairGui.IgnoreGuiInset = true
-
-local crosshairFrame = Instance.new("Frame")
-crosshairFrame.Name = "Crosshair"
-crosshairFrame.Parent = crosshairGui
-crosshairFrame.Size = UDim2.new(0, 30, 0, 30)
-crosshairFrame.Position = UDim2.new(0.5, -15, 0.5, -15)
-crosshairFrame.BackgroundTransparency = 1
-crosshairFrame.Visible = false
-
-local horizontalLine = Instance.new("Frame")
-horizontalLine.Parent = crosshairFrame
-horizontalLine.Size = UDim2.new(1, 0, 0, 2)
-horizontalLine.Position = UDim2.new(0, 0, 0.5, -1)
-horizontalLine.BackgroundColor3 = Color3.new(1,1,1)
-horizontalLine.BorderSizePixel = 0
-
-local verticalLine = Instance.new("Frame")
-verticalLine.Parent = crosshairFrame
-verticalLine.Size = UDim2.new(0, 2, 1, 0)
-verticalLine.Position = UDim2.new(0.5, -1, 0, 0)
-verticalLine.BackgroundColor3 = Color3.new(1,1,1)
-verticalLine.BorderSizePixel = 0
-
-local dotFrame = Instance.new("Frame")
-dotFrame.Parent = crosshairFrame
-dotFrame.Size = UDim2.new(0, 6, 0, 6)
-dotFrame.Position = UDim2.new(0.5, -3, 0.5, -3)
-dotFrame.BackgroundColor3 = Color3.new(1,1,1)
-dotFrame.BorderSizePixel = 0
-local dotCorner = Instance.new("UICorner")
-dotCorner.CornerRadius = UDim.new(1,0)
-dotCorner.Parent = dotFrame
-
-
-
-
+--================================================================================================================================
+--自定义按键模块
+--================================================================================================================================
 
 local UserInputService = game:GetService("UserInputService")
 
-
-local playerGui = player:WaitForChild("PlayerGui")
-
-local touchButtonPaths = {
-{ path = {"TouchGui", "TouchControlFrame", "JumpButton"}, name = "JumpButton" },
-{ path = {"TouchCore", "TouchControls", "AltUseButton"}, name = "AltUseButton" },
-{ path = {"TouchCore", "TouchControls", "LockButton"}, name = "LockButton" },
-{ path = {"TouchCore", "TouchControls", "EmoteButton"}, name = "EmoteButton" },
-{ path = {"TouchCore", "TouchControls", "SprintButton"}, name = "SprintButton" },
-{ path = {"TouchCore", "TouchControls", "UseButton"}, name = "UseButton" },
-}
 
 local touchButtonData = {}
 local selectedButtonName = nil
@@ -1244,6 +1187,352 @@ end
 end
 end)
 
+--================================================================================================================================
+--透视模块
+--================================================================================================================================
+local function initPerspective()
+local RunService = game:GetService("RunService")
+local enabled = false
+local highlights = {}
+local loopThread = nil
+
+local function hasWeapon(plr, name)
+local lower = name:lower()
+local bp = plr:FindFirstChild("Backpack")
+local char = plr.Character
+if bp then
+for _, c in ipairs(bp:GetChildren()) do
+if c.Name:lower() == lower then return true end
+end
+end
+if char then
+for _, c in ipairs(char:GetChildren()) do
+if c.Name:lower() == lower then return true end
+end
+end
+return false
+end
+
+local function addHighlight(plr)
+local char = plr.Character
+if not char or not char.Parent then return end
+if highlights[plr] then return end
+local h = Instance.new("Highlight")
+h.OutlineTransparency = 1
+h.Parent = char
+highlights[plr] = h
+end
+
+local function removeHighlight(plr)
+local h = highlights[plr]
+if h then h:Destroy(); highlights[plr] = nil end
+end
+
+local function clearAll()
+for plr, _ in pairs(highlights) do removeHighlight(plr) end
+end
+
+local function applyAll()
+for _, plr in ipairs(Players:GetPlayers()) do addHighlight(plr) end
+end
+
+local function updateColors()
+if not enabled then return end
+for plr, h in pairs(highlights) do
+if hasWeapon(plr, "knife") then
+h.FillColor = Color3.new(1, 0, 0)
+elseif hasWeapon(plr, "excalibur") or hasWeapon(plr, "excalibur jr.") then
+h.FillColor = Color3.new(1, 0.84, 0) 
+elseif hasWeapon(plr, "revolver") then
+h.FillColor = Color3.new(0, 0, 1)
+else
+h.FillColor = Color3.new(0, 1, 0)
+end
+end
+end
+
+local function startLoop()
+if loopThread then return end
+loopThread = task.spawn(function()
+while enabled do
+task.wait(0.1)
+if enabled then updateColors() end
+end
+loopThread = nil
+end)
+end
+
+local function stopLoop()
+if loopThread then task.cancel(loopThread); loopThread = nil end
+end
+
+local function setEnabled(state)
+enabled = state
+if enabled then
+clearAll()
+applyAll()
+startLoop()
+else
+stopLoop()
+clearAll()
+end
+end
+
+local function onPlayerAdded(plr)
+plr.CharacterAdded:Connect(function(char)
+if enabled then
+removeHighlight(plr)
+addHighlight(plr)
+end
+end)
+if enabled and plr.Character then addHighlight(plr) end
+end
+
+for _, plr in ipairs(Players:GetPlayers()) do onPlayerAdded(plr) end
+Players.PlayerAdded:Connect(onPlayerAdded)
+Players.PlayerRemoving:Connect(removeHighlight)
+
+player.CharacterAdded:Connect(function(char)
+if enabled then
+removeHighlight(player)
+addHighlight(player)
+end
+end)
+
+return { setEnabled = setEnabled }
+end
+
+local perspectiveHandler = initPerspective()
+
+local tripmineLocator = (function()
+local TAG_NAME = "TripmineLocator"
+local TAG_TEXT = "⚠ 子空间地雷"
+local TEXT_COLOR = Color3.new(0.7, 0.2, 1)
+local TEXT_TRANSPARENCY = 0.5
+local OFFSET = Vector3.new(0, 3, 0)
+
+local enabled = false
+local activeTags = {}
+local connections = {}
+
+local function createTag(part)
+if not part or not part:IsA("BasePart") then return end
+if part:FindFirstChild(TAG_NAME) then return end
+
+local billboard = Instance.new("BillboardGui")
+billboard.Name = TAG_NAME
+billboard.Size = UDim2.new(0, 80, 0, 16)
+billboard.StudsOffset = OFFSET
+billboard.AlwaysOnTop = true
+billboard.Adornee = part
+billboard.Parent = part
+
+local label = Instance.new("TextLabel")
+label.Size = UDim2.new(1, 0, 1, 0)
+label.BackgroundTransparency = 1
+label.Text = TAG_TEXT
+label.TextColor3 = TEXT_COLOR
+label.TextTransparency = TEXT_TRANSPARENCY
+label.TextScaled = false
+label.TextSize = 12
+label.TextStrokeTransparency = 0.3
+label.TextStrokeColor3 = Color3.new(0, 0, 0)
+label.Font = Enum.Font.GothamBold
+label.Parent = billboard
+
+table.insert(activeTags, billboard)
+return billboard
+end
+
+local function removeTag(part)
+local tag = part:FindFirstChild(TAG_NAME)
+if tag then
+tag:Destroy()
+for i = #activeTags, 1, -1 do
+if activeTags[i] == tag then
+table.remove(activeTags, i)
+break
+end
+end
+end
+end
+
+local function clearAllTags()
+for _, tag in ipairs(activeTags) do
+tag:Destroy()
+end
+activeTags = {}
+end
+
+local function getAllTripmines(container)
+local results = {}
+if not container then return results end
+
+for _, child in ipairs(container:GetChildren()) do
+if child.Name == "Tripmine" and child:IsA("BasePart") then
+table.insert(results, child)
+end
+if child:IsA("Model") then
+for _, sub in ipairs(child:GetDescendants()) do
+if sub.Name == "Tripmine" and sub:IsA("BasePart") then
+table.insert(results, sub)
+end
+end
+end
+end
+return results
+end
+
+local function scanAndApply()
+local placeables = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Placeables")
+if not placeables then return end
+
+local tripmines = getAllTripmines(placeables)
+for _, part in ipairs(tripmines) do
+createTag(part)
+end
+end
+
+local function watchTripmines()
+local placeables = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Placeables")
+if not placeables then return end
+
+local conn = placeables.ChildAdded:Connect(function(child)
+if not enabled then return end
+
+if child:IsA("BasePart") and child.Name == "Tripmine" then
+createTag(child)
+return
+end
+
+if child:IsA("Model") then
+for _, sub in ipairs(child:GetDescendants()) do
+if sub.Name == "Tripmine" and sub:IsA("BasePart") then
+createTag(sub)
+end
+end
+local descConn = child.DescendantAdded:Connect(function(sub)
+if enabled and sub.Name == "Tripmine" and sub:IsA("BasePart") then
+createTag(sub)
+end
+end)
+table.insert(connections, descConn)
+end
+end)
+table.insert(connections, conn)
+
+for _, child in ipairs(placeables:GetChildren()) do
+if child:IsA("Model") then
+local descConn = child.DescendantAdded:Connect(function(sub)
+if enabled and sub.Name == "Tripmine" and sub:IsA("BasePart") then
+createTag(sub)
+end
+end)
+table.insert(connections, descConn)
+end
+end
+end
+
+local function setEnabled(state)
+if state == enabled then return end
+enabled = state
+
+if enabled then
+scanAndApply()
+watchTripmines()
+else
+for _, conn in ipairs(connections) do
+conn:Disconnect()
+end
+connections = {}
+clearAllTags()
+end
+end
+
+local function onMapReset()
+if enabled then
+for _, conn in ipairs(connections) do
+conn:Disconnect()
+end
+connections = {}
+clearAllTags()
+scanAndApply()
+watchTripmines()
+end
+end
+
+local function watchPlaceables()
+local map = workspace:FindFirstChild("Map")
+if not map then return end
+
+local conn = map.ChildAdded:Connect(function(child)
+if child.Name == "Placeables" then
+onMapReset()
+end
+end)
+table.insert(connections, conn)
+
+local conn2 = map.ChildRemoved:Connect(function(child)
+if child.Name == "Placeables" and enabled then
+clearAllTags()
+for _, c in ipairs(connections) do
+c:Disconnect()
+end
+connections = {}
+end
+end)
+table.insert(connections, conn2)
+end
+
+watchPlaceables()
+
+return { setEnabled = setEnabled }
+end)()
+
+
+--================================================================================================================================
+--其他模块
+--================================================================================================================================
+
+local crosshairGui = Instance.new("ScreenGui")
+crosshairGui.Name = "CrosshairGui"
+crosshairGui.Parent = playerGui
+crosshairGui.ResetOnSpawn = false
+crosshairGui.IgnoreGuiInset = true
+
+local crosshairFrame = Instance.new("Frame")
+crosshairFrame.Name = "Crosshair"
+crosshairFrame.Parent = crosshairGui
+crosshairFrame.Size = UDim2.new(0, 30, 0, 30)
+crosshairFrame.Position = UDim2.new(0.5, -15, 0.5, -15)
+crosshairFrame.BackgroundTransparency = 1
+crosshairFrame.Visible = false
+
+local horizontalLine = Instance.new("Frame")
+horizontalLine.Parent = crosshairFrame
+horizontalLine.Size = UDim2.new(1, 0, 0, 2)
+horizontalLine.Position = UDim2.new(0, 0, 0.5, -1)
+horizontalLine.BackgroundColor3 = Color3.new(1,1,1)
+horizontalLine.BorderSizePixel = 0
+
+local verticalLine = Instance.new("Frame")
+verticalLine.Parent = crosshairFrame
+verticalLine.Size = UDim2.new(0, 2, 1, 0)
+verticalLine.Position = UDim2.new(0.5, -1, 0, 0)
+verticalLine.BackgroundColor3 = Color3.new(1,1,1)
+verticalLine.BorderSizePixel = 0
+
+local dotFrame = Instance.new("Frame")
+dotFrame.Parent = crosshairFrame
+dotFrame.Size = UDim2.new(0, 6, 0, 6)
+dotFrame.Position = UDim2.new(0.5, -3, 0.5, -3)
+dotFrame.BackgroundColor3 = Color3.new(1,1,1)
+dotFrame.BorderSizePixel = 0
+local dotCorner = Instance.new("UICorner")
+dotCorner.CornerRadius = UDim.new(1,0)
+dotCorner.Parent = dotFrame
+
+
 
 
 
@@ -1254,7 +1543,7 @@ end)
 WindUI:Popup({
 Title = "注意!!",
 Icon = "info",
-Content = "这个脚本由Deepseek编写主要代码, wq_furry(我)整理,WindUI提供库支持 如果在脚本使用过程中出现被举报等情况概不负责",
+Content = "这个脚本由Deepseek编写主要代码, wq整理, WindUI提供库支持; 如果在脚本使用过程中出现被举报封号等情况, 我概不负责",
 Buttons = {
 {
 Title = "还是算了吧",
@@ -1277,7 +1566,7 @@ playSound(5)
 local Window = WindUI:CreateWindow({
 Title = "SEWH Script",
 Icon = "door-open",
-Author = "By wq_fury",
+Author = "By wq",
 
 Size = UDim2.fromOffset(580, 300),
 MinSize = Vector2.new(50, 30),
@@ -1308,32 +1597,32 @@ Title = "SEWH Script",
 Icon = "monitor",
 CornerRadius = UDim.new(0,16),
 StrokeThickness = 2,
-Color = ColorSequence.new( -- gradient
+Color = ColorSequence.new( 
 Color3.fromHex("FF2200"), 
 Color3.fromHex("00FF9E")
 ),
-    OnlyMobile = false,
-    Enabled = true,
-    Draggable = true,
+OnlyMobile = false,
+Enabled = true,
+Draggable = true,
 })
 
 Window:Tag({
 Title = scriptVersion,
 Icon = "github",
 Color = Color3.fromHex("#30ff6a"),
-Radius = 0, -- from 0 to 13
+Radius = 0, 
 })
 
 Window:Tag({
 Title = scriptDate,
 Icon = "history",
 Color = Color3.fromHex("#30ff6a"),
-Radius = 0, -- from 0 to 13
+Radius = 0, 
 })
 
 local Tab = Window:Tab({
 Title = "公告",
-Icon = "bookmark", -- optional
+Icon = "bookmark", 
 Locked = false,
 })
 
@@ -1351,7 +1640,47 @@ Thumbnail = "",
 ThumbnailSize = 80,
 Locked = false,
 })
+
+local Paragraph = Tab:Paragraph({
+Title = "动作&物品 译: Yore",
+Desc = "可能含有多种奇葩翻译",
+Image = "",
+ImageSize = 30,
+Thumbnail = "",
+ThumbnailSize = 80,
+Locked = false,
+})
+
 local Tab = Window:Tab({Title = "主要功能",Icon = "monitor-check", Locked = false,})
+
+local Button = Tab:Button({
+Title = "取消互动cd",
+Desc = "",
+Locked = false,
+Callback = function()
+local function zeroPrompt(prompt)
+if prompt:IsA("ProximityPrompt") then
+prompt.HoldDuration = 0
+end
+end
+
+local function scanAll()
+for _, obj in ipairs(workspace:GetDescendants()) do
+zeroPrompt(obj)
+end
+end
+
+scanAll()
+
+workspace.DescendantAdded:Connect(function(child)
+zeroPrompt(child)
+if child:IsA("Model") then
+for _, sub in ipairs(child:GetDescendants()) do
+zeroPrompt(sub)
+end
+end
+end)
+end})
 
 
 local Toggle = Tab:Toggle({
@@ -1418,18 +1747,18 @@ local Tab = Window:Tab({Title = "表情",Icon = "smile", Locked = false,})
 local Dropdown = Tab:Dropdown({
 Title = "表情选择",
 Desc = "从所有可用表情中选择一个",
-Values = allEmoteIds,
-Value = allEmoteIds[1] or "",
+Values = displayNames,
+Value = displayNames[1] or "",
 Callback = function(option)
-selectedEmote = option
+selectedEmote = displayToId[option] or option 
 end
 })
 
-local Button = Tab:Button({Title = "做表情",Desc = "",Locked = false,Callback = function()    EmoteHandler.doEmote(selectedEmote) end})
+local Button = Tab:Button({Title = "做表情",Desc = "",Locked = false,Callback = function()EmoteHandler.doEmote(selectedEmote) end})
 
 local Tab = Window:Tab({Title = "键位调整",Icon = "app-window", Locked = false,})
 
-local Button_record = Tab:Button({Title = "查找全部按钮",Desc = "确保全部按钮都出现,仅记录一次",Locked = false,Callback = function()    recordOriginalButtonData() Button_record:Destroy()  end})
+local Button_record = Tab:Button({Title = "查找全部按钮",Desc = "确保全部按钮都出现,仅记录一次",Locked = false,Callback = function()recordOriginalButtonData() Button_record:Destroy()end})
 
 local Toggle = Tab:Toggle({
 Title = "按键编辑器",
@@ -1446,9 +1775,9 @@ end
 end
 })
 
-local Button = Tab:Button({Title = "放大20%",Desc = "",Locked = false,Callback = function()    scaleSelectedButton(1.2) end})
+local Button = Tab:Button({Title = "放大20%",Desc = "",Locked = false,Callback = function()scaleSelectedButton(1.2) end})
 
-local Button = Tab:Button({Title = "缩小20%",Desc = "",Locked = false,Callback = function()    scaleSelectedButton(1/1.2) end})
+local Button = Tab:Button({Title = "缩小20%",Desc = "",Locked = false,Callback = function()scaleSelectedButton(1/1.2) end})
 
 local Button = Tab:Button({
 Title = "重置所有按钮位置/大小",
@@ -1473,48 +1802,31 @@ Icon = "check",
 Type = "Checkbox",
 Value = false,
 Callback = function(state)
-backpackDisplayEnabled = state
-if state then
-initBackpackDisplay(true)
-else
-cleanupAllTags()
-stopBackpackLoop()
-end
+initBackpackDisplay(state)
 end
 })
 
-
-local highlightToggle = Tab:Toggle({
-Title = "透视",
-Desc = "默认绿色,对",
+local Toggle = Tab:Toggle({
+Title = "玩家透视",
+Desc = "显示所有玩家(或者他的阵营)",
 Icon = "check",
 Type = "Checkbox",
 Value = false,
 Callback = function(state)
-initHighlight(state)
+perspectiveHandler.setEnabled(state)
 end
 })
 
-
-local colorToggle = Tab:Toggle({
-Title = "阵营透视补丁",
-Desc = "杀人狂特殊回合  杀手→红色 | 警长→蓝色 | 平民→绿色（透视必须先开开）",
+local Toggle = Tab:Toggle({
+Title = "子空间地雷定位",
+Desc = "以文字显示",
 Icon = "check",
 Type = "Checkbox",
 Value = false,
 Callback = function(state)
-colorChangeEnabled = state
-if highlightEnabled then
-for _, plr in ipairs(Players:GetPlayers()) do
-if plr ~= player then
-updateHighlightColor(plr)
-end
-end
-end
+tripmineLocator.setEnabled(state)
 end
 })
-
-
 
 local Tab = Window:Tab({Title = "快捷传送",Icon = "bird",Locked = false,})
 
