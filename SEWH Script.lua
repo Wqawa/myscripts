@@ -1,6 +1,6 @@
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Wqawa/myscripts/refs/heads/main/windUI%20main.lua"))()
 
-local scriptVersion = "v 0.31 rework p1"
+local scriptVersion = "v 0.31 rework p2"
 local scriptDate = "2026/7/15"
 
 local Players = game:GetService("Players")
@@ -20,6 +20,9 @@ local touchButtonPaths = {
 { path = {"TouchCore", "TouchControls", "EmoteButton"}, name = "EmoteButton" },
 { path = {"TouchCore", "TouchControls", "SprintButton"}, name = "SprintButton" },
 { path = {"TouchCore", "TouchControls", "UseButton"}, name = "UseButton" },
+{ path = {"TouchCore", "TouchControls", "DropButton"}, name = "DropButton" },
+{ path = {"TouchCore", "TouchControls", "DiveButton"}, name = "DiveButton" },
+
 }
 
 --背包内容黑名单
@@ -28,7 +31,7 @@ local LIMB_NAMES = {
 "Left Leg", "Right Leg", "HumanoidRootPart",
 "CharacterLengthBox",
 "Sleigh", "broom", "Model", "JeepCar", "boombox",
-"Stuff", "Recorder", "Potion", "Props", "prop", "skeleton"
+"Stuff", "Recorder", "Potion", "Props", "prop", "skeleton", "Part"
 }
 
 --================================================================================================================================
@@ -558,7 +561,7 @@ end
 
 local function clearSemiStun()
 if not enabled then return end
-game:GetService("ReplicatedStorage"):WaitForChild("Communication"):WaitForChild("Packets"):WaitForChild("Packet"):WaitForChild("RemoteEvent"):FireServer(buffer.fromstring("\000\000"))
+game:GetService("ReplicatedStorage"):WaitForChild("Communication"):WaitForChild("Packets"):WaitForChild("Packet"):WaitForChild("RemoteEvent"):FireServer(buffer.fromstring("\001\000"))
 end
 
 local function setEnabled(state)
@@ -1861,7 +1864,7 @@ local Button = Tab:Button({Title = "终点",Desc = "滑坡特殊回合",Locked =
 
 Tab:Divider()
 
-local Button = Tab:Button({Title = "回高塔(出生点,办法1)",Desc = "利用客户端函数重置玩家返回",Locked = false,Callback = function() game:GetService("ReplicatedStorage"):WaitForChild("Communication"):WaitForChild("Packets"):WaitForChild("Packet"):WaitForChild("RemoteEvent"):FireServer(buffer.fromstring("`\003")) end})
+local Button = Tab:Button({Title = "回高塔(出生点,办法1)",Desc = "利用客户端函数重置玩家返回",Locked = false,Callback = function() game:GetService("ReplicatedStorage"):WaitForChild("Communication"):WaitForChild("Packets"):WaitForChild("Packet"):WaitForChild("RemoteEvent"):FireServer(buffer.fromstring("\142\a")) end})
 local Button = Tab:Button({Title = "回高塔(出生点,办法2)",Desc = "传送",Locked = false,Callback = function() teleportTo(nil ,-35, 100, -442) end})
 local Button = Tab:Button({Title = "高塔负二层",Desc = "传送",Locked = false,Callback = function() teleportTo(nil ,-35, 88, -442) end})
 
@@ -1933,8 +1936,8 @@ Window:SetToggleKey(Enum.KeyCode[v])
 end
 })
 
-wait(0.1)
-game:GetService("ReplicatedStorage"):WaitForChild("Communication"):WaitForChild("Packets"):WaitForChild("Packet"):WaitForChild("RemoteEvent"):FireServer(buffer.fromstring("`\003"))
+wait(0.1)--[[
+game:GetService("ReplicatedStorage"):WaitForChild("Communication"):WaitForChild("Packets"):WaitForChild("Packet"):WaitForChild("RemoteEvent"):FireServer(buffer.fromstring("\142\a"))
 
 
 
@@ -1946,7 +1949,6 @@ playButton = playButton:WaitForChild("Main")
 playButton = playButton:WaitForChild("MainArea")
 playButton = playButton:WaitForChild("MainButtons")
 playButton = playButton:WaitForChild("PlayButton")
-
 wait(0.5)
 
 local absPos = playButton.AbsolutePosition
@@ -1958,7 +1960,7 @@ local centerY = absPos.Y + absSize.Y / 2
 VirtualInputManager:SendMouseButtonEvent(centerX, centerY+50, 0, true, nil, 0)
 wait(0.05)
 VirtualInputManager:SendMouseButtonEvent(centerX, centerY+50, 0, false, nil, 0)
-
+]]
 end,
 Variant = "Primary",
 }
